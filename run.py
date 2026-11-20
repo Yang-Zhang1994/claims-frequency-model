@@ -6,6 +6,7 @@ from __future__ import annotations
 import sqlite3
 import time
 
+import joblib
 import matplotlib
 
 matplotlib.use("Agg")
@@ -44,6 +45,8 @@ def main() -> None:
                      **{k: round(v, 4) for k, v in models.evaluate(model, test).items()}})
         preds[name] = model.predict(test[models.FEATURES])
     scores = pd.DataFrame(rows)
+    # The boosted model is the one monitor.py watches.
+    joblib.dump(candidates["Gradient boosting (Poisson loss)"], OUT / "model.joblib")
 
     y = models.frequency(test).to_numpy()
     w = test["exposure"].to_numpy()

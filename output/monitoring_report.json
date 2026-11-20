@@ -1,0 +1,211 @@
+{
+  "generated_at": "2026-11-20T02:32:13+00:00",
+  "model": "Gradient boosting (Poisson loss)",
+  "validation": {
+    "poisson_deviance": 0.5743,
+    "gini": 0.3301,
+    "predicted_to_observed_claims": 0.9956
+  },
+  "thresholds": {
+    "psi_watch": 0.1,
+    "psi_alert": 0.25,
+    "actual_to_expected_band": [
+      0.9,
+      1.1
+    ],
+    "gini_alert_ratio": 0.8
+  },
+  "batches": {
+    "steady": {
+      "policies": 84752,
+      "status": "ok",
+      "action": "No action needed.",
+      "drifted_features": [],
+      "watched_features": [],
+      "performance": {
+        "actual_claims": 4430.0,
+        "expected_claims": 4482.2,
+        "actual_to_expected": 0.988,
+        "gini": 0.3296,
+        "poisson_deviance": 0.5695,
+        "status": "ok",
+        "reasons": []
+      },
+      "drift": {
+        "area": {
+          "psi": 0.0,
+          "status": "ok"
+        },
+        "veh_brand": {
+          "psi": 0.0002,
+          "status": "ok"
+        },
+        "veh_gas": {
+          "psi": 0.0001,
+          "status": "ok"
+        },
+        "region": {
+          "psi": 0.0004,
+          "status": "ok"
+        },
+        "veh_age": {
+          "psi": 0.0001,
+          "status": "ok"
+        },
+        "driv_age": {
+          "psi": 0.0002,
+          "status": "ok"
+        },
+        "veh_power": {
+          "psi": 0.0001,
+          "status": "ok"
+        },
+        "bonus_malus": {
+          "psi": 0.0,
+          "status": "ok"
+        },
+        "density": {
+          "psi": 0.0001,
+          "status": "ok"
+        }
+      }
+    },
+    "mix_shift": {
+      "policies": 84752,
+      "status": "watch",
+      "action": "Inputs shifted but predictions still match claims; keep monitoring.",
+      "drifted_features": [
+        "driv_age",
+        "bonus_malus"
+      ],
+      "watched_features": [],
+      "performance": {
+        "actual_claims": 5344.0,
+        "expected_claims": 5448.9,
+        "actual_to_expected": 0.981,
+        "gini": 0.4256,
+        "poisson_deviance": 0.6909,
+        "status": "ok",
+        "reasons": []
+      },
+      "drift": {
+        "area": {
+          "psi": 0.0026,
+          "status": "ok"
+        },
+        "veh_brand": {
+          "psi": 0.0097,
+          "status": "ok"
+        },
+        "veh_gas": {
+          "psi": 0.0019,
+          "status": "ok"
+        },
+        "region": {
+          "psi": 0.0068,
+          "status": "ok"
+        },
+        "veh_age": {
+          "psi": 0.0078,
+          "status": "ok"
+        },
+        "driv_age": {
+          "psi": 0.6242,
+          "status": "alert"
+        },
+        "veh_power": {
+          "psi": 0.0111,
+          "status": "ok"
+        },
+        "bonus_malus": {
+          "psi": 0.4189,
+          "status": "alert"
+        },
+        "density": {
+          "psi": 0.0039,
+          "status": "ok"
+        }
+      }
+    },
+    "claims_trend": {
+      "policies": 84752,
+      "status": "alert",
+      "action": "Model output is off; investigate and consider retraining.",
+      "drifted_features": [],
+      "watched_features": [],
+      "performance": {
+        "actual_claims": 5407.0,
+        "expected_claims": 4491.3,
+        "actual_to_expected": 1.204,
+        "gini": 0.3292,
+        "poisson_deviance": 0.6392,
+        "status": "alert",
+        "reasons": [
+          "actual/expected claims 1.20 outside 0.90-1.10"
+        ]
+      },
+      "drift": {
+        "area": {
+          "psi": 0.0002,
+          "status": "ok"
+        },
+        "veh_brand": {
+          "psi": 0.0001,
+          "status": "ok"
+        },
+        "veh_gas": {
+          "psi": 0.0001,
+          "status": "ok"
+        },
+        "region": {
+          "psi": 0.0002,
+          "status": "ok"
+        },
+        "veh_age": {
+          "psi": 0.0001,
+          "status": "ok"
+        },
+        "driv_age": {
+          "psi": 0.0001,
+          "status": "ok"
+        },
+        "veh_power": {
+          "psi": 0.0001,
+          "status": "ok"
+        },
+        "bonus_malus": {
+          "psi": 0.0001,
+          "status": "ok"
+        },
+        "density": {
+          "psi": 0.0002,
+          "status": "ok"
+        }
+      }
+    }
+  },
+  "summary": [
+    {
+      "batch": "steady",
+      "status": "ok",
+      "action": "No action needed.",
+      "actual_to_expected": 0.988,
+      "drifted_features": "none"
+    },
+    {
+      "batch": "mix_shift",
+      "status": "watch",
+      "action": "Inputs shifted but predictions still match claims; keep monitoring.",
+      "actual_to_expected": 0.981,
+      "drifted_features": "driv_age, bonus_malus"
+    },
+    {
+      "batch": "claims_trend",
+      "status": "alert",
+      "action": "Model output is off; investigate and consider retraining.",
+      "actual_to_expected": 1.204,
+      "drifted_features": "none"
+    }
+  ],
+  "overall_status": "alert"
+}

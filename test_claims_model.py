@@ -4,7 +4,7 @@ import unittest
 import numpy as np
 import pandas as pd
 
-from claims_model import data, models
+from claims_model import data, models, monitoring
 
 
 def toy_raw() -> pd.DataFrame:
@@ -93,6 +93,66 @@ class ModelTest(unittest.TestCase):
         probe["area"] = ["A", "B"]
         pred = model.predict(probe[models.FEATURES])
         self.assertAlmostEqual(pred[1] / pred[0], 3.0, delta=0.6)
+
+
+class MonitoringTest(unittest.TestCase):
+    def test_psi_is_near_zero_for_the_same_distribution(self):
+        rng = np.random.default_rng(0)
+        ref = pd.Series(rng.normal(50, 10, 20000))
+        cur = pd.Series(rng.normal(50, 10, 20000))
+        self.assertLess(monitoring.psi(ref, cur), 0.01)
+        self.assertEqual(monitoring.psi_status(monitoring.psi(ref, cur)), "ok")
+
+    def test_psi_flags_a_shifted_distribution(self):
+        rng = np.random.default_rng(1)
+        ref = pd.Series(rng.normal(50, 10, 20000))
+        cur = pd.Series(rng.normal(60, 10, 20000))
+        self.assertEqual(monitoring.psi_status(monitoring.psi(ref, cur)), "alert")
+
+    def test_psi_counts_a_category_never_seen_in_training(self):
+        ref = pd.Series(["A"] * 500 + ["B"] * 500)
+        cur = pd.Series(["A"] * 500 + ["Z"] * 500)
+        self.assertEqual(monitoring.psi_status(monitoring.psi(ref, cur)), "alert")
+
+    def test_performance_alerts_when_claims_outrun_predictions(self):
+        rng = np.random.default_rng(2)
+        n = 20000
+        df = pd.DataFrame({
+            "area": "A", "veh_brand": "B1", "veh_gas": "Regular", "region": "R11",
+            "veh_age": rng.integers(0, 20, n), "driv_age": rng.integers(18, 90, n),
+            "veh_power": 6, "bonus_malus": 50, "density": 100, "exposure": 1.0,
+        })
+        df["claims"] = rng.poisson(0.1, n)
+        model = models.fit(models.baseline(), df)
+        self.assertEqual(monitoring.performance_report(model, df, baseline_gini=0.0)["status"], "ok")
+        more = df.assign(claims=df["claims"] + rng.poisson(0.03, n))
+        report = monitoring.performance_report(model, more, baseline_gini=0.0)
+        self.assertEqual(report["status"], "alert")
+        self.assertGreater(report["actual_to_expected"], 1.1)
+
+    def test_summary_separates_input_drift_from_model_failure(self):
+        drift = {"driv_age": {"psi": 0.3, "status": "alert"}, "area": {"psi": 0.01, "status": "ok"}}
+        ok_perf = {"status": "ok"}
+        bad_perf = {"status": "alert"}
+        self.assertEqual(monitoring.summarize(drift, ok_perf)["status"], "watch")
+        self.assertEqual(monitoring.summarize(drift, bad_perf)["status"], "alert")
+        self.assertEqual(monitoring.summarize({"area": {"psi": 0.0, "status": "ok"}}, ok_perf)["status"], "ok")
+
+
+class SnowflakeSqlTest(unittest.TestCase):
+    def test_sql_files_split_into_the_expected_statements(self):
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("loader", data.ROOT / "snowflake" / "load_to_snowflake.py")
+        loader = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(loader)
+        setup = loader.statements((data.ROOT / "snowflake" / "setup.sql").read_text())
+        transform = loader.statements((data.ROOT / "snowflake" / "transform.sql").read_text())
+        self.assertEqual(len(setup), 5)
+        self.assertTrue(setup[0].startswith("CREATE WAREHOUSE"))
+        self.assertEqual([s.split()[4] for s in transform],
+                         ["CLAIMS.ANALYTICS.MODEL_TABLE", "CLAIMS.ANALYTICS.DATA_QUALITY", "CLAIMS.ANALYTICS.FREQ_BY_BONUS_MALUS"])
+        self.assertIn("REPLACE(VEHGAS, \'\'\'\', \'\')", transform[0])
 
 
 if __name__ == "__main__":

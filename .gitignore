@@ -3,3 +3,4 @@ __pycache__/
 data/
 output/policies.sqlite
 output/.mplconfig/
+output/model.joblib
