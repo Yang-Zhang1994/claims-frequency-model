@@ -73,8 +73,33 @@ Poisson deviance is reported too, but not used for alerts: it rises on any riski
 The point of keeping both checks: input drift alone does not mean the model is wrong (`mix_shift`), and a
 model can go stale while every input looks normal (`claims_trend`).
 
-[`docs/power-automate-alert.md`](docs/power-automate-alert.md) shows how to turn the report into a weekly
-email with a Power Automate cloud flow (HTTP → Parse JSON → condition → HTML table → email).
+### Weekly alert email (low-code, n8n)
+
+[`automation/n8n/model-health-alert.json`](automation/n8n/model-health-alert.json) is an n8n workflow that
+turns the report into an email for whoever owns the model:
+
+```
+Every Monday 10:00 ─► Fetch health report (HTTP) ─► Needs attention? ── no ─► Healthy, no alert
+                                                         │ yes
+                       One item per batch ─► Keep flagged batches ─► Build HTML table ─► Compose alert ─► Send email
+```
+
+It uses only built-in nodes (Schedule, HTTP Request, If, Split Out, Filter, HTML, Edit Fields, Send Email).
+To use it, import the file in n8n (*Workflows → Import from file*), attach an SMTP credential to **Send email**,
+set the recipient, and activate it.
+
+`automation/n8n/test_n8n_workflow.py` runs the workflow in the n8n CLI against two local fixture reports.
+On the alert report it checks that the email subject reads `Claims model: ALERT (2 batch(es) flagged)` and
+that the table lists only the two flagged batches. On a healthy report it checks that the flow stops
+without building an email. CI runs it on every push. The email node is removed for these runs, because
+CI has no SMTP account.
+
+```bash
+npm install -g n8n
+python -m unittest discover -s automation/n8n -v
+```
+
+[`docs/power-automate-alert.md`](docs/power-automate-alert.md) builds the same flow in Power Automate.
 
 ## Snowflake version of the pipeline
 

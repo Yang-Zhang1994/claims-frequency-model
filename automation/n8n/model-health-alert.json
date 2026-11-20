@@ -1,0 +1,164 @@
+{
+  "name": "Claims model health alert",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Run manually",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "weeks", "weeksInterval": 1, "triggerAtDay": [1], "triggerAtHour": 10 }]
+        }
+      },
+      "id": "a1b2c3d4-0002-4000-8000-000000000002",
+      "name": "Every Monday 10:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 200]
+    },
+    {
+      "parameters": {
+        "url": "https://raw.githubusercontent.com/Yang-Zhang1994/claims-frequency-model/main/output/monitoring_report.json",
+        "options": { "response": { "response": { "responseFormat": "json" } } }
+      },
+      "id": "a1b2c3d4-0003-4000-8000-000000000003",
+      "name": "Fetch health report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [240, 100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "conditions": [
+            {
+              "id": "c0000000-0000-4000-8000-000000000001",
+              "leftValue": "={{ $json.overall_status }}",
+              "rightValue": "ok",
+              "operator": { "type": "string", "operation": "notEquals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0004-4000-8000-000000000004",
+      "name": "Needs attention?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [480, 100]
+    },
+    {
+      "parameters": { "fieldToSplitOut": "summary", "options": {} },
+      "id": "a1b2c3d4-0005-4000-8000-000000000005",
+      "name": "One item per batch",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [720, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "conditions": [
+            {
+              "id": "c0000000-0000-4000-8000-000000000002",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "ok",
+              "operator": { "type": "string", "operation": "notEquals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0006-4000-8000-000000000006",
+      "name": "Keep flagged batches",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [960, 0]
+    },
+    {
+      "parameters": { "operation": "convertToHtmlTable", "options": {} },
+      "id": "a1b2c3d4-0007-4000-8000-000000000007",
+      "name": "Build HTML table",
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1.2,
+      "position": [1200, 0]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d0000000-0000-4000-8000-000000000001",
+              "name": "subject",
+              "value": "=Claims model: {{ $('Fetch health report').first().json.overall_status.toUpperCase() }} ({{ $('Keep flagged batches').all().length }} batch(es) flagged)",
+              "type": "string"
+            },
+            {
+              "id": "d0000000-0000-4000-8000-000000000002",
+              "name": "html",
+              "value": "=<p>Report generated {{ $('Fetch health report').first().json.generated_at }}.</p>{{ $json.table }}<p>Rules: PSI ≥ 0.25 or actual/expected outside 0.90–1.10 is an alert; PSI ≥ 0.10 is a watch.</p>",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0008-4000-8000-000000000008",
+      "name": "Compose alert",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1440, 0]
+    },
+    {
+      "parameters": {
+        "fromEmail": "model-monitor@example.com",
+        "toEmail": "you@example.com",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "html",
+        "html": "={{ $json.html }}",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0009-4000-8000-000000000009",
+      "name": "Send email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1680, 0],
+      "credentials": { "smtp": { "id": "REPLACE_WITH_YOUR_SMTP_CREDENTIAL", "name": "SMTP" } }
+    },
+    {
+      "parameters": {},
+      "id": "a1b2c3d4-0010-4000-8000-000000000010",
+      "name": "Healthy, no alert",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [720, 200]
+    }
+  ],
+  "connections": {
+    "Run manually": { "main": [[{ "node": "Fetch health report", "type": "main", "index": 0 }]] },
+    "Every Monday 10:00": { "main": [[{ "node": "Fetch health report", "type": "main", "index": 0 }]] },
+    "Fetch health report": { "main": [[{ "node": "Needs attention?", "type": "main", "index": 0 }]] },
+    "Needs attention?": {
+      "main": [
+        [{ "node": "One item per batch", "type": "main", "index": 0 }],
+        [{ "node": "Healthy, no alert", "type": "main", "index": 0 }]
+      ]
+    },
+    "One item per batch": { "main": [[{ "node": "Keep flagged batches", "type": "main", "index": 0 }]] },
+    "Keep flagged batches": { "main": [[{ "node": "Build HTML table", "type": "main", "index": 0 }]] },
+    "Build HTML table": { "main": [[{ "node": "Compose alert", "type": "main", "index": 0 }]] },
+    "Compose alert": { "main": [[{ "node": "Send email", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false,
+  "pinData": {}
+}

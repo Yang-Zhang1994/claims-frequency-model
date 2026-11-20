@@ -16,3 +16,17 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt
       - run: python -m unittest -v
+
+  n8n-workflow:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: npm install -g n8n@2.48.6
+      - name: Run the n8n alert workflow against alert and healthy reports
+        run: python -m unittest discover -s automation/n8n -v

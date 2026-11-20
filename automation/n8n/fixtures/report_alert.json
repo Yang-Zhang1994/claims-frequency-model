@@ -1,0 +1,27 @@
+{
+  "generated_at": "2026-11-20T02:36:26+00:00",
+  "summary": [
+    {
+      "batch": "steady",
+      "status": "ok",
+      "action": "No action needed.",
+      "actual_to_expected": 0.988,
+      "drifted_features": "none"
+    },
+    {
+      "batch": "mix_shift",
+      "status": "watch",
+      "action": "Inputs shifted but predictions still match claims; keep monitoring.",
+      "actual_to_expected": 0.981,
+      "drifted_features": "driv_age, bonus_malus"
+    },
+    {
+      "batch": "claims_trend",
+      "status": "alert",
+      "action": "Model output is off; investigate and consider retraining.",
+      "actual_to_expected": 1.204,
+      "drifted_features": "none"
+    }
+  ],
+  "overall_status": "alert"
+}
