@@ -5,14 +5,17 @@ Predicts how often a motor insurance policy will claim, using the public
 a standard benchmark in actuarial machine learning. The workflow is the one an
 actuarial pricing team uses for claim frequency: check the data in SQL, model
 claims per policy-year with exposure as the weight, then compare models on
-held-out policies.
+held-out policies. Two neural models in PyTorch sit alongside the scikit-learn ones, and an MCP server
+lets an AI agent score and explain policies with them.
 
 ```
 OpenML ──► SQLite "policies" ──► SQL quality checks + capped "model_table" ──► train / test (75 / 25)
                                                                                  │
-              baseline · Poisson GLM · gradient boosting (Poisson loss) ◄────────┘
+   baseline · Poisson GLM · gradient boosting (scikit-learn) · neural net · GLM + neural (PyTorch) ◄──┘
                                    │
                        deviance · Gini · calibration ──► output/results.md, lorenz.png, calibration.png
+                                   │
+                       MCP server (score, explain, compare, monitor) ◄── Claude Code or any MCP client
 ```
 
 ## Results (held-out 169,504 policies)
@@ -22,6 +25,8 @@ OpenML ──► SQLite "policies" ──► SQL quality checks + capped "model_
 | Baseline (portfolio mean) | 0.6258 | −0.010 | 0.995 |
 | Poisson GLM | 0.5962 | 0.274 | 0.992 |
 | Gradient boosting (Poisson loss) | **0.5743** | **0.330** | 0.996 |
+| Neural net (PyTorch, embeddings) | 0.5859 | 0.296 | 0.990 |
+| GLM + neural correction (CANN, PyTorch) | 0.5865 | 0.299 | 0.989 |
 
 - Both models beat the baseline. Gradient boosting separates risks best: its
   riskiest 10% of exposure has 7.6× the claim frequency of its safest 10%
@@ -32,6 +37,9 @@ OpenML ──► SQLite "policies" ──► SQL quality checks + capped "model_
 - The GLM is not far behind and is much easier to explain to a rating
   committee, since each factor is a multiplier. In practice I would show both:
   the GLM as the rating structure and the boosted model as a check on what it misses.
+- The neural nets beat the GLM (Gini 0.296–0.299 vs 0.274) but not gradient boosting. On tabular
+  data of this size that is the usual result; the network's value here is the comparison, and that
+  it learns smooth age and density effects without hand-made bands.
 
 ![Lorenz curves](output/lorenz.png)
 ![Calibration by decile](output/calibration.png)
@@ -49,6 +57,49 @@ OpenML ──► SQLite "policies" ──► SQL quality checks + capped "model_
 
 The SQL step also produces a quick view of the strongest rating factor
 (`output/results.md`): frequency rises from 0.082 at bonus-malus 50–59 to 0.312 at 100+.
+
+## Neural models (PyTorch)
+
+`claims_model/neural.py` wraps a PyTorch network in the same `fit(X, frequency, sample_weight=exposure)`
+/ `predict` interface as the scikit-learn models, so `run.py` evaluates all five the same way.
+
+| Choice | Detail |
+|---|---|
+| Inputs | Learned embeddings for area, brand, fuel and region (an unseen category maps to its own slot); standardized vehicle power, vehicle age, driver age, bonus-malus and log density |
+| Network | Two hidden layers (32, 16, tanh) giving log-frequency |
+| Exposure | `log(exposure)` is an offset, so the loss is Poisson on claim counts, the same weighting the other models get |
+| Starting point | The output layer starts at zero, so training begins at the portfolio mean (or, for CANN, exactly at the GLM) |
+| Training | Adam, batches of 2,048, early stopping on 10% of the training policies, fixed seed (two runs give identical results) |
+| Overall level | Early stopping left predictions 2–4% high in total, so one factor rescales them to match the training claims (the balance property a Poisson GLM has by construction). Computed on training data only |
+
+CANN (combined actuarial neural network) starts from the fitted GLM's prediction and learns only a
+correction, which keeps the GLM's structure as the backbone. Here it matched the plain network.
+
+On synthetic data with known effects, the network recovers a 2× bonus-malus effect from 80,000 policies
+but not from 20,000 (early stopping on a validation split with ~150 claims is too noisy), while the GLM
+recovers it from 20,000. The test suite checks both.
+
+## Agent access through MCP
+
+`claims_model/mcp_server.py` is a [Model Context Protocol](https://modelcontextprotocol.io) server
+(official Python SDK) that exposes the trained models as tools. The agent never sees the training data.
+
+| Tool | What it returns |
+|---|---|
+| `score_policy(policy)` | Claims per year from all four models, the policy's risk decile on the held-out book, and its ratio to a typical policy |
+| `explain_policy(policy)` | The GLM's multiplier for each rating factor, from a typical policy to this one, ranked. They multiply out exactly to the GLM's prediction |
+| `compare_models()` | The held-out scores table |
+| `monitoring_status()` | The latest drift and actual/expected report |
+| resource `claims://model-card` | [Model card](docs/model-card.md): data, models, intended use and what not to use them for |
+
+Inputs are typed and range-checked (a 12-year-old driver or region `R99` is rejected, naming the field),
+and values above the training caps are capped exactly as the SQL prep caps the training data.
+
+`.mcp.json` registers the server with Claude Code. [docs/agent-session/transcript.md](docs/agent-session/transcript.md)
+is a recorded session: asked which of three new policies is riskiest and whether to trust the model,
+Claude Code scored and explained all three, checked monitoring, and answered. Its answer also flagged
+two real weaknesses: the networks disagree with the other models on one policy (0.288 vs ~0.18), and
+the GLM gives young drivers an apparent discount because bonus-malus 100 already carries their risk.
 
 ## Monitoring the model after deployment
 
@@ -124,10 +175,17 @@ Key-pair setup (one time): `openssl genrsa 2048 | openssl pkcs8 -topk8 -nocrypt 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-python -m unittest -v      # 12 tests: SQL prep, metrics, GLM recovering a known 3x rate, PSI, A/E, SQL files
-python run.py              # downloads ~10 MB from OpenML on first run, ~20 s on a laptop
+python -m unittest -v      # 24 tests, ~5 s: SQL prep, metrics, PSI, A/E, the networks and the MCP server
+python run.py              # downloads ~10 MB from OpenML on first run, ~20 s on a laptop (all five models)
 python monitor.py          # scores the simulated batches, writes output/monitoring_report.json
+claude                     # in this folder, Claude Code picks up .mcp.json and can call the claims tools
 ```
+
+The new tests (`test_neural_and_mcp.py`) use synthetic policies with known effects: the network
+recovers them, matches training claims in total, gives identical results for the same seed, handles
+unseen categories, and CANN with no training equals the GLM. The MCP tests connect a real MCP client
+to the server in-process and check every tool, the model card, the multipliers multiplying out, and
+input validation.
 
 ## Limits and next steps
 
@@ -135,6 +193,8 @@ python monitor.py          # scores the simulated batches, writes output/monitor
   Tweedie model on freMTPL2sev).
 - One train/test split. Cross-validated deviance and a confidence band on the
   Gini would make the model comparison firmer.
+- The networks' size and learning rate were set by hand, and they disagree with the other models on
+  some policies; a small tuning run with cross-validation, and an ensemble, would be next.
 - The boosted model's hyperparameters were set by hand. A small tuning run and
   partial-dependence plots would be the next things to add.
 - Monitoring batches are simulated from held-out policies; a real deployment would feed each quarter's

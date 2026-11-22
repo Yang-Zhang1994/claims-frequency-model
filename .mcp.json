@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "claims": {
+      "command": ".venv/bin/python",
+      "args": ["-m", "claims_model.mcp_server"]
+    }
+  }
+}

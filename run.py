@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage data in SQLite, fit three frequency models, and write results to output/."""
+"""Stage data in SQLite, fit the frequency models (sklearn and PyTorch), and write results to output/."""
 
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 
 from claims_model import data, models
+from claims_model.neural import NeuralPoisson
 
 OUT = data.ROOT / "output"
 
@@ -31,10 +32,14 @@ def main() -> None:
 
     train, test = train_test_split(df, test_size=0.25, random_state=42)
 
+    glm = models.poisson_glm()
     candidates = {
         "Baseline (portfolio mean)": models.baseline(),
-        "Poisson GLM": models.poisson_glm(),
+        "Poisson GLM": glm,
         "Gradient boosting (Poisson loss)": models.gradient_boosting(),
+        "Neural net (PyTorch, embeddings)": NeuralPoisson(),
+        # Fitted after the GLM (dict order), so it can start from the GLM's predictions.
+        "GLM + neural correction (CANN)": NeuralPoisson(offset=glm),
     }
     rows, preds = [], {}
     for name, model in candidates.items():
@@ -45,8 +50,19 @@ def main() -> None:
                      **{k: round(v, 4) for k, v in models.evaluate(model, test).items()}})
         preds[name] = model.predict(test[models.FEATURES])
     scores = pd.DataFrame(rows)
-    # The boosted model is the one monitor.py watches.
+    # The boosted model is the one monitor.py watches; the MCP server loads all of them.
     joblib.dump(candidates["Gradient boosting (Poisson loss)"], OUT / "model.joblib")
+    joblib.dump({"glm": glm, "gradient_boosting": candidates["Gradient boosting (Poisson loss)"],
+                 "neural_net": candidates["Neural net (PyTorch, embeddings)"],
+                 "cann": candidates["GLM + neural correction (CANN)"], "scores": scores.to_dict("records"),
+                 # The "typical policy" explanations compare against: most common category, median number.
+                 "reference": {**{c: train[c].mode()[0] for c in models.CATEGORICAL},
+                               **{c: float(train[c].median()) for c in models.BINNED + models.NUMERIC}},
+                 "test_predictions": {"gradient_boosting": preds["Gradient boosting (Poisson loss)"],
+                                      "exposure": test["exposure"].to_numpy()}},
+                OUT / "models.joblib")
+    for name in ("Neural net (PyTorch, embeddings)", "GLM + neural correction (CANN)"):
+        print(f"{name}: best epoch {candidates[name].best_epoch_} of {len(candidates[name].history) - 1}")
 
     y = models.frequency(test).to_numpy()
     w = test["exposure"].to_numpy()
