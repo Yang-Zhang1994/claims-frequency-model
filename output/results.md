@@ -22,13 +22,13 @@
 
 Lower Poisson deviance is better; higher Gini separates risks better; predicted/observed claims near 1.0 means the total is right.
 
-| model                            |   fit_seconds |   poisson_deviance |    gini |   predicted_to_observed_claims |
-|:---------------------------------|--------------:|-------------------:|--------:|-------------------------------:|
-| Baseline (portfolio mean)        |           0   |             0.6258 | -0.0101 |                         0.9951 |
-| Poisson GLM                      |           0.8 |             0.5962 |  0.2742 |                         0.9921 |
-| Gradient boosting (Poisson loss) |           2.1 |             0.5743 |  0.3301 |                         0.9956 |
-| Neural net (PyTorch, embeddings) |           4.6 |             0.5859 |  0.296  |                         0.9898 |
-| GLM + neural correction (CANN)   |           5.9 |             0.5865 |  0.2991 |                         0.9888 |
+| model                            |   fit_seconds |   poisson_deviance |   gini |   predicted_to_observed_claims |
+|:---------------------------------|--------------:|-------------------:|-------:|-------------------------------:|
+| Baseline (portfolio mean)        |           0   |             0.6258 | 0.0075 |                         0.9951 |
+| Poisson GLM                      |           1.8 |             0.5962 | 0.2742 |                         0.9921 |
+| Gradient boosting (Poisson loss) |           3   |             0.5743 | 0.3301 |                         0.9956 |
+| Neural net (PyTorch, embeddings) |          10   |             0.5859 | 0.296  |                         0.9898 |
+| GLM + neural correction (CANN)   |          12.7 |             0.5865 | 0.2991 |                         0.9888 |
 
 ## Calibration by decile (gradient boosting)
 
@@ -37,9 +37,9 @@ Lower Poisson deviance is better; higher Gini separates risks better; predicted/
 |        1 |    8953.43 |          0.0405 |           0.0403 |
 |        2 |    8953.39 |          0.056  |           0.0537 |
 |        3 |    8953.87 |          0.062  |           0.0624 |
-|        4 |    8953.44 |          0.0667 |           0.07   |
-|        5 |    8954.13 |          0.0726 |           0.0767 |
-|        6 |    8953.12 |          0.0838 |           0.083  |
+|        4 |    8953.94 |          0.0667 |           0.07   |
+|        5 |    8953.6  |          0.0726 |           0.0767 |
+|        6 |    8953.15 |          0.0838 |           0.083  |
 |        7 |    8954.67 |          0.0892 |           0.0898 |
 |        8 |    8953.69 |          0.0971 |           0.1    |
 |        9 |    8952.81 |          0.1335 |           0.1279 |
